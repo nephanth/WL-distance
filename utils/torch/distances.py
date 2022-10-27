@@ -2,7 +2,7 @@
 """Alternative torch implementation, based on sinkhorn instead of ot
 the goal is to get a fast and differentiable loss
 """
-from typing import overload
+from typing import overload, Literal
 
 import torch
 from torch import Tensor
@@ -12,8 +12,21 @@ import torch.nn.functional as F
 # Because we need arbitrary cost matrices, as opposed to 
 # having access to an embedding in R^n
 
-def sinkhorn(a: Tensor, b: Tensor, C: Tensor, epsilon: float, k: int=100):
-    """Batched version of sinkhorn distance
+@overload
+def sinkhorn(a: Tensor, b: Tensor, C: Tensor, 
+        epsilon: float, k: int=100, *, 
+        return_solutions: Literal[False]= False) -> Tensor:
+    ...
+
+@overload
+def sinkhorn(a: Tensor, b: Tensor, C: Tensor, 
+        epsilon: float, k: int=100, *, 
+        return_solutions: Literal[True]) -> tuple[Tensor, tuple[Tensor, Tensor, Tensor]]:
+    ...
+
+def sinkhorn(a: Tensor, b: Tensor, C: Tensor, 
+        epsilon: float, k: int=100, *, return_solutions: bool = False):
+    r"""Batched version of sinkhorn distance
 
     The 3 batch dims will be broadcast to each other. 
     Every steps is only broadcasted torch operations,
@@ -25,9 +38,14 @@ def sinkhorn(a: Tensor, b: Tensor, C: Tensor, epsilon: float, k: int=100):
         C: (*batch, n, m) Cost matrix
         epsilon: Regularization parameter
         k: number of iteration (this version does not check for convergence)
+        return_solutions: whether to return P, f and g
 
     Returns:
         divergence: (*batch) $divergence[*i] = OT^\epsilon(a[*i], b[*i], C[*i])$
+
+        (f_eps, g_eps, log_P): only if return_solutions is True. 
+        f_eps is f/epsilon, g_eps is g/epsilon where f and g are the dual solutions. 
+        log_P is log(P) where P is the optimal transport
     """
 
     *batch, n = a.shape
@@ -48,6 +66,8 @@ def sinkhorn(a: Tensor, b: Tensor, C: Tensor, epsilon: float, k: int=100):
         g_eps = log_b - torch.logsumexp(mC_eps + f_eps, dim=-2, keepdim=True)
     log_P = mC_eps + f_eps + g_eps
     res = (C.log() + log_P).exp().sum((-1, -2))
+    if return_solutions:
+        return res, (f_eps, g_eps, log_P)
     return res
 
 def markov_measure(M: Tensor) -> Tensor:
