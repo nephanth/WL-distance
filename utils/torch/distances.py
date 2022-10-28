@@ -59,8 +59,8 @@ def sinkhorn(a: Tensor, b: Tensor, C: Tensor,
     log_b = b.log()[..., None, :]
     mC_eps = - C / epsilon
 
-    f_eps = torch.randn((*batch, n, 1))#f over epsilon #batch, n
-    g_eps = torch.randn((*batch, 1, m))#g over epsilon #batch, m
+    f_eps = torch.randn((*batch, n, 1), device=log_a.device)#f over epsilon #batch, n
+    g_eps = torch.randn((*batch, 1, m), device=log_b.device)#g over epsilon #batch, m
     for _ in range(k):
         f_eps = log_a - torch.logsumexp(mC_eps + g_eps, dim=-1, keepdim=True)
         g_eps = log_b - torch.logsumexp(mC_eps + f_eps, dim=-2, keepdim=True)
